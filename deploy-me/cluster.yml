@@ -1,0 +1,155 @@
+--- 
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: pinaka-uat # ClusterName
+  region: ap-south-1 # Region e.g us-east-1
+  version: "1.19" # Version
+  tags: # Tags
+    product: "pinaka"
+    clustername: "pinaka-uat"
+    owner: "xxxxxxx"
+    deployedby: "xxxxxx"
+    env: "uat"
+
+vpc:
+  id: "vpc-xxxxxxxxxxx"  # (optional, must match VPC ID used for each subnet below)
+  cidr: "10.21.0.0/16"       # (optional, must match CIDR used by the given VPC)
+  securityGroup: "sg-xxxxxxxxxx" #(aka the ControlPlaneSecurityGroup) for communication between control plane and nodes
+  #sharedNodeSecurityGroup: #for pre-defined shared node SG
+  subnets:
+    # must provide 'private' and/or 'public' subnets by availibility zone as shown
+    private:
+      # All private subnets excluding DB/Cache
+      pinaka-uat-private-1a:
+        id: "subnet-x1x1x1x"
+      pinaka-uat-private-1b:
+        id: "subnet-x2x2x2x"
+      pinaka-uat-private-1c:
+        id: "subnet-x3x3x3x"
+
+    public:
+      # All public subnets. 
+      pinaka-uat-public-1a:
+        id: "subnet-x4x4x4"    
+      pinaka-uat-public-1b:
+        id: "subnet-x5x5x5"
+      pinaka-uat-public-1c:
+        id: "subnet-xx66x6x"
+
+  clusterEndpoints:
+    publicAccess:  false
+    privateAccess: true    
+
+cloudWatch:
+  clusterLogging:
+    # enable specific types of cluster control plane logs
+    # enableTypes: ["audit", "authenticator", "controllerManager"]
+    # enableTypes: ["authenticator", "audit"]
+iam:
+  vpcResourceControllerPolicy: true
+  withOIDC: true  
+  serviceRoleARN: "arn:aws:iam::ddddddd:role/eksCluster-pinaka-uat-role-cs23"
+  
+  serviceAccounts:
+  - metadata:
+      name: aws-load-balancer-controller
+      namespace: kube-system
+      labels:
+        name: "aws-load-balancer-controller"
+        clustername: "pinaka-uat"   
+    # wellKnownPolicies:
+    #   awsLoadBalancerController: true    
+    attachPolicyARNs:
+      - "arn:aws:iam::ddddddd:policy/AWSLoadBalancerControllerIAMPolicy-pinaka-uat-cs23"
+      - "arn:aws:iam::ddddddd:policy/AWSLoadBalancerControllerAdditionalIAMPolicy-pinaka-uat-cs23"
+
+  - metadata:
+      name: ebs-csi-controller-sa
+      namespace: kube-system
+      labels:
+        name: "ebs-csi-controller-sa"
+        clustername: "pinaka-uat"   
+    attachPolicyARNs:
+      - "arn:aws:iam::ddddddd:policy/AmazonEKS_EBS_CSI_Driver_Policy-pinaka-uat-cs23"
+
+  - metadata:
+      name: cluster-autoscaler
+      namespace: kube-system
+      labels:
+        name: "cluster-autoscaler"
+        clustername: "pinaka-uat"
+    attachPolicy:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Action:
+          - "autoscaling:DescribeAutoScalingGroups"
+          - "autoscaling:DescribeAutoScalingInstances"
+          - "autoscaling:DescribeLaunchConfigurations"
+          - "autoscaling:DescribeTags"
+          - "autoscaling:SetDesiredCapacity"
+          - "autoscaling:TerminateInstanceInAutoScalingGroup"
+          - "ec2:DescribeLaunchTemplateVersions"
+          Resource: '*' 
+
+
+
+  - metadata:
+      name: external-dns-k8s
+      namespace: kube-system
+      labels:
+        name: "external-dns-k8s"
+    wellKnownPolicies:
+      externalDNS: true
+      
+# addons:
+# - name: coredns
+#   version: "1.8.0"
+# - name: kube-proxy
+#   version: "1.19.6"     
+
+managedNodeGroups:
+  - name: managed-pinaka-uat-spot-1
+    amiFamily: AmazonLinux2
+    labels:
+      env: "uat"
+      product: "pinaka"
+      clustername: "pinaka-uat"
+      owner: "pinaka"
+      deployedby: "eksctl"
+      lifecycle: "spot"
+      type: "computeoptimized"
+    tags:
+      env: "uat"
+      product: "pinaka"
+      clustername: "pinaka-uat"
+      owner: "pinaka"
+      deployedby: "eksctl"
+      lifecycle: "spot"
+      type: "computeoptimized"
+    instanceTypes: ["c5.xlarge","c5d.xlarge","c5n.xlarge","c5a.xlarge"]
+    spot: true
+    privateNetworking: true
+    minSize: 2
+    maxSize: 5
+    desiredCapacity: 2
+    ssh:
+      publicKeyName: pinaka-uat-mumbai	# KeyName
+      #publicKey: ''
+      enableSsm: true
+    volumeSize: 50
+    volumeType: gp3
+    volumeThroughput: 125
+    volumeEncrypted: true
+    subnets:
+      - pinaka-uat-private-1a
+      - pinaka-uat-private-1b
+      - pinaka-uat-private-1c
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
